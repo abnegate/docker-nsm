@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+
+  suricata:
+    container_name: suricata
+    build:
+      context: ./suricata
+    environment:
+      INTERFACES: ${INTERFACES}
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    volumes:
+      - suricata-rules:/usr/local/etc/suricata/rules
+      - suricata-run:/usr/local/var/run/suricata
+      - ./suricata/logrotate:/usr/local/etc/logrotate.d
+      - ./suricata/logs:/usr/local/var/log/suricata
+      - ./suricata/etc:/usr/local/etc/suricata
+    network_mode: host
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: elastic/elasticsearch:${ELK_VERSION}
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=true
+      - ingest.geoip.downloader.enabled=false
+    volumes:
+      - elastic-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      nsm:
+
+  logstash:
+    container_name: logstash
+    image: elastic/logstash:${ELK_VERSION}
+    environment:
+      xpack.monitoring.elasticsearch.url: http://elasticsearch:9200
+    volumes:
+      - logstash-sincedb:/since.db
+      - ./suricata/logs:/usr/local/var/log/suricata:ro
+      - ./logstash/conf.d/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - ./logstash/templates/elasticsearch8-template.json:/usr/share/logstash/config/elasticsearch7-template.json
+    networks:
+      nsm:
+
+  kibana:
+    container_name: kibana
+    build:
+      context: ./kibana
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      nsm:
+
+networks:
+  nsm:
+
+volumes:
+  suricata-rules:
+  suricata-run:
+  suricata-logs:
+  suricata-logrotate:
+  elastic-data:
+  logstash-sincedb:
